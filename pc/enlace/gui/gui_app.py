@@ -97,7 +97,7 @@ class RedesEmisorGUI:
         file_entry_box.pack(fill="x", padx=15, pady=(0, 12))
 
         self.txt_path = tk.Entry(file_entry_box, textvariable=self.filepath_var, state="readonly",
-                                 bg=self.COLOR_BG, fg=self.COLOR_TEXT, bd=1,
+                                 bg=self.COLOR_BG, fg="#12181f", bd=1,
                                  highlightbackground=self.COLOR_CARD_BORDER, font=("Consolas", 9))
         self.txt_path.pack(side="left", fill="x", expand=True, ipady=4, padx=(0, 10))
 
