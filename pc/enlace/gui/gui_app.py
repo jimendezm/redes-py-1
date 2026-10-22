@@ -209,7 +209,51 @@ class RedesEmisorGUI:
         self._log("Tasa de error estimada: 00.00%")
 
         self.progress_bar['value'] = 0
-        messagebox.showinfo("Proceso Exitoso", f"El archivo se ha fragmentado en {resumen['total_fragmentos']} bloques binarios.\nListo para la entrega a la Capa de Enlace.")
+        self.root.update() # Refrescar la interfaz
+        
+        # =================================================================
+        # INTEGRACIÓN CON LA CAPA DE ENLACE 
+        # =================================================================
+        
+        # Aquí es donde instanciamos la clase Emisor.
+        # Como aún no tenemos el archivo emisor.py importado, dejo la estructura 
+        # lista para cuando lo unan.
+        
+        try:
+            # from emisor import Emisor  <-- Descomentar cuando se integre
+            
+            # 1. Crear el emisor con los parámetros de la GUI
+            # mi_emisor = Emisor(W=window_size, timeout=2.0) 
+            
+            total_frags = resumen['total_fragmentos']
+            errores_simulados = 0 # Esto lo debe proveer la capa de enlace luego
+            
+            # 2. Simulación de envío para que la barra de progreso se mueva por ahora
+            # (Cuando integren, esto lo hará la capa de enlace real)
+            for i, fragmento in enumerate(resumen['fragmentos']):
+                
+                # mi_emisor.enviar_trama(fragmento) <-- Así se enviará real
+                
+                # Actualizar progreso en la GUI
+                progreso = ((i + 1) / total_frags) * 100
+                self.progress_bar['value'] = progreso
+                self.root.update() # Obliga a la GUI a redibujarse
+                
+                # Simular un pequeño delay (solo para ver la barra moverse en la prueba)
+                self.root.after(10) 
+                
+            # 3. Finalización
+            self._log("Transmisión Finalizada!")
+            
+            # Calcular tasa de error (Fórmula: Errores / Total tramas enviadas * 100)
+            tasa_error = (errores_simulados / total_frags) * 100 if total_frags > 0 else 0
+            self._log(f"Tasa de error estimada: {tasa_error:.2f}%")
+            
+            messagebox.showinfo("Proceso Exitoso", "El archivo se ha transferido a la capa de enlace correctamente.")
+            
+        except Exception as e:
+            self._log(f"[ERROR] Fallo en la capa de enlace: {str(e)}")
+            messagebox.showerror("Error de Enlace", f"Ocurrió un error al enviar: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
