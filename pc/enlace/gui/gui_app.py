@@ -3,7 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 import os
 from pc.enlace.gui.file_processor import FileProcessor
 from pc.enlace.sesion_emisor import SesionEmisor
-from pc.enlace.canal import crear_canal  # el canal serial de ustedes
+from pc.enlace.canal import crear_canal 
 
 class RedesEmisorGUI:
     def __init__(self, root: tk.Tk):
