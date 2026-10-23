@@ -1,4 +1,4 @@
-from pc.enlace.stuffing import EOF, SOF
+from pc.enlace.formato.stuffing import EOF, SOF
 
 
 class LectorTramas:

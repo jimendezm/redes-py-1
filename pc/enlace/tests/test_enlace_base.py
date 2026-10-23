@@ -1,7 +1,8 @@
 import pytest
 
-from pc.enlace import stuffing, trama
-from pc.enlace.crc import crc16_ccitt
+from pc.enlace.formato import trama
+from pc.enlace.formato.crc import crc16_ccitt
+from pc.enlace.formato import stuffing
 
 
 def test_crc_vector_conocido():

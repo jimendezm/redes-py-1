@@ -3,9 +3,9 @@ import sys
 import time
 import tkinter as tk
 
-from pc.enlace import registro
+from pc.enlace.gui import registro
 from pc.enlace.gui.gui_receptor import RedesReceptorGUI
-from pc.enlace.sesion_receptor import SesionReceptor
+from pc.enlace.sesion.sesion_receptor import SesionReceptor
 from pc.enlace.canal import crear_canal
 
 # El puerto se abre antes de recibir el INICIO, así que baud y Hamming

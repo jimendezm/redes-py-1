@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os
 from pc.enlace.gui.file_processor import FileProcessor
-from pc.enlace.sesion_emisor import SesionEmisor
+from pc.enlace.sesion.sesion_emisor import SesionEmisor
 from pc.enlace.canal import crear_canal 
 
 class RedesEmisorGUI:

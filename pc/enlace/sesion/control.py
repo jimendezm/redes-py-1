@@ -8,7 +8,7 @@ lados usen el mismo valor sin tener que calcularlo por separado.
 """
 from collections import namedtuple
 
-from pc.enlace import trama
+from pc.enlace.formato import trama
 
 INICIO, ACEPTADO = 1, 2
 LARGO_FIJO_INICIO = 15

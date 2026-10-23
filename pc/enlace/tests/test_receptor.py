@@ -1,4 +1,4 @@
-from pc.enlace.receptor import Receptor
+from pc.enlace.protocolo.receptor import Receptor
 
 
 def armar(W, J):

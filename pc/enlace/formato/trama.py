@@ -1,7 +1,7 @@
 from collections import namedtuple
 
-from pc.enlace import stuffing
-from pc.enlace.crc import crc16_ccitt
+from pc.enlace.formato import stuffing
+from pc.enlace.formato.crc import crc16_ccitt
 
 DATA, ACK, NAK, CONTROL = 0, 1, 2, 3
 MAX_DATOS = 900

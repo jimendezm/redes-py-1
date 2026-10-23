@@ -1,4 +1,4 @@
-from pc.enlace.emisor import Emisor
+from pc.enlace.protocolo.emisor import Emisor
 
 
 class RelojFalso:

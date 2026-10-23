@@ -2,9 +2,9 @@ import random
 
 import pytest
 
-from pc.enlace import trama
-from pc.enlace.emisor import Emisor
-from pc.enlace.receptor import Receptor
+from pc.enlace.formato import trama
+from pc.enlace.protocolo.emisor import Emisor
+from pc.enlace.protocolo.receptor import Receptor
 
 TIPO = {"ACK": trama.ACK, "NAK": trama.NAK}
 

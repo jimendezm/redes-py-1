@@ -1,9 +1,10 @@
 import time
 
-from pc.enlace import control, trama
-from pc.enlace.emisor import Emisor
-from pc.enlace.lector_tramas import LectorTramas
-from pc.enlace.parametros import calcular_J, calcular_timeout
+from pc.enlace.sesion import control
+from pc.enlace.protocolo.emisor import Emisor
+from pc.enlace.formato import trama
+from pc.enlace.formato.lector_tramas import LectorTramas
+from pc.enlace.protocolo.parametros import calcular_J, calcular_timeout
 
 NEGOCIANDO, TRANSMITIENDO = "negociando", "transmitiendo"
 

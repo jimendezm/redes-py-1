@@ -1,7 +1,8 @@
-from pc.enlace import control, trama
-from pc.enlace.lector_tramas import LectorTramas
-from pc.enlace.parametros import tasa_error_estimada
-from pc.enlace.receptor import Receptor
+from pc.enlace.sesion import control
+from pc.enlace.formato import trama
+from pc.enlace.formato.lector_tramas import LectorTramas
+from pc.enlace.protocolo.parametros import tasa_error_estimada
+from pc.enlace.protocolo.receptor import Receptor
 
 TIPO_RESPUESTA = {"ACK": trama.ACK, "NAK": trama.NAK}
 
