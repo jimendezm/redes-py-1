@@ -1,7 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import os
-from file_processor import FileProcessor
+from pc.enlace.gui.file_processor import FileProcessor
+from pc.enlace.sesion_emisor import SesionEmisor
+from pc.enlace.canal import crear_canal  # el canal serial de ustedes
 
 class RedesEmisorGUI:
     def __init__(self, root: tk.Tk):
@@ -31,6 +33,7 @@ class RedesEmisorGUI:
         self.hamming_var = tk.BooleanVar(value=True)
 
         self.processor: FileProcessor = None
+        self.sesion = None
 
         self._configurar_estilos()
         self._crear_interfaz()
@@ -130,10 +133,10 @@ class RedesEmisorGUI:
         ttk.Checkbutton(grid_params, text="Habilitar Hamming (8,4)", variable=self.hamming_var, style="TCheckbutton").grid(row=1, column=2, columnspan=2, sticky="w", padx=5)
 
         # Botón Acción Principal
-        btn_action = tk.Button(self.root, text="⚡ CARGAR Y FRAGMENTAR ARCHIVO", command=self._preparar_transmision,
+        self.btn_action = tk.Button(self.root, text="⚡ CARGAR Y FRAGMENTAR ARCHIVO", command=self._preparar_transmision,
                                bg=self.COLOR_ACCENT, fg="#12181f", activebackground=self.COLOR_ACCENT_HOVER,
                                activeforeground="#ffffff", font=("Segoe UI", 10, "bold"), bd=0, pady=8, cursor="hand2")
-        btn_action.pack(fill="x", padx=25, pady=6)
+        self.btn_action.pack(fill="x", padx=25, pady=6)
 
         # 3. TARJETA: Monitor y Consola de Estado
         card_monitor = tk.Frame(self.root, bg=self.COLOR_CARD, highlightbackground=self.COLOR_CARD_BORDER, highlightthickness=1)
@@ -212,48 +215,70 @@ class RedesEmisorGUI:
         self.root.update() # Refrescar la interfaz
         
         # =================================================================
-        # INTEGRACIÓN CON LA CAPA DE ENLACE 
+        # INTEGRACIÓN CON LA CAPA DE ENLACE
         # =================================================================
-        
-        # Aquí es donde instanciamos la clase Emisor.
-        # Como aún no tenemos el archivo emisor.py importado, dejo la estructura 
-        # lista para cuando lo unan.
-        
+        self.btn_action.config(state="disabled")
+
         try:
-            # from emisor import Emisor  <-- Descomentar cuando se integre
-            
-            # 1. Crear el emisor con los parámetros de la GUI
-            # mi_emisor = Emisor(W=window_size, timeout=2.0) 
-            
-            total_frags = resumen['total_fragmentos']
-            errores_simulados = 0 # Esto lo debe proveer la capa de enlace luego
-            
-            # 2. Simulación de envío para que la barra de progreso se mueva por ahora
-            # (Cuando integren, esto lo hará la capa de enlace real)
-            for i, fragmento in enumerate(resumen['fragmentos']):
-                
-                # mi_emisor.enviar_trama(fragmento) <-- Así se enviará real
-                
-                # Actualizar progreso en la GUI
-                progreso = ((i + 1) / total_frags) * 100
-                self.progress_bar['value'] = progreso
-                self.root.update() # Obliga a la GUI a redibujarse
-                
-                # Simular un pequeño delay (solo para ver la barra moverse en la prueba)
-                self.root.after(10) 
-                
-            # 3. Finalización
-            self._log("Transmisión Finalizada!")
-            
-            # Calcular tasa de error (Fórmula: Errores / Total tramas enviadas * 100)
-            tasa_error = (errores_simulados / total_frags) * 100 if total_frags > 0 else 0
-            self._log(f"Tasa de error estimada: {tasa_error:.2f}%")
-            
-            messagebox.showinfo("Proceso Exitoso", "El archivo se ha transferido a la capa de enlace correctamente.")
-            
+            canal = crear_canal(baudrate, use_hamming)
+            self.sesion = SesionEmisor(
+                bloques=resumen['fragmentos'],
+                W=window_size,
+                payload=payload_size,
+                baud=baudrate,
+                hamming=use_hamming,
+                canal=canal,
+                tamano=resumen['tamano_total_bytes'],
+                extension=resumen['extension'],
+                al_estado=self._estado_enlace,
+                al_progreso=self._set_progreso,
+            )
+            self.sesion.iniciar()
+            self._tick()
         except Exception as e:
             self._log(f"[ERROR] Fallo en la capa de enlace: {str(e)}")
             messagebox.showerror("Error de Enlace", f"Ocurrió un error al enviar: {str(e)}")
+            self.btn_action.config(state="normal")
+
+    def _estado_enlace(self, mensaje: str):
+        # "Inicio" y "en curso" ya se muestran arriba, no los repito
+        if mensaje in ("Inicio de transmisión...", "Transmisión en curso..."):
+            return
+        # mismo texto de antes para el final
+        if mensaje == "Transmisión finalizada":
+            mensaje = "Transmisión Finalizada!"
+        self._log(mensaje)
+
+    def _set_progreso(self, porcentaje):
+        self.progress_bar['value'] = porcentaje
+
+    def _tick(self):
+        try:
+            self.sesion.tick()
+        except Exception as e:
+            self._log(f"[ERROR] Fallo en la capa de enlace: {str(e)}")
+            messagebox.showerror("Error de Enlace", f"Ocurrió un error al enviar: {str(e)}")
+            self.btn_action.config(state="normal")
+            return
+
+        if not self.sesion.terminada:
+            self.root.after(5, self._tick)  # vuelve a llamarse sin congelar la ventana
+            return
+
+        self.btn_action.config(state="normal")
+        if self.sesion.abortada:
+            messagebox.showerror("Error de Enlace", "La transmisión se abortó.")
+            return
+
+        # Tasa de error (Fórmula: Errores / Total tramas enviadas * 100)
+        # acá el error es una retransmisión; la del receptor es la oficial
+        em = self.sesion.emisor
+        total = em.enviadas + em.retransmisiones
+        tasa_error = (em.retransmisiones / total) * 100 if total > 0 else 0
+        self._log(f"Tasa de error estimada: {tasa_error:.2f}%")
+
+        messagebox.showinfo("Proceso Exitoso", "El archivo se ha transferido a la capa de enlace correctamente.")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
