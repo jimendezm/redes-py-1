@@ -1,33 +1,44 @@
 """Canal para la capa de enlace.
 
-Lo usan SesionEmisor y SesionReceptor:
     canal.enviar(bytes)
     canal.recibir(max_bytes, timeout)   # con timeout 0 no bloquea
+    canal.ajustar_ritmo(baud, hamming)
+    canal.cerrar()
 
-Dos modos, se elige con MODO:
-    "emulado"  cable falso por localhost (las dos ventanas en la misma PC, sin Arduino)
-    "serial"   puerto serial real
+La capa de enlace siempre ve bytes limpios. Dos modos, se elige con MODO:
 
-Con Hamming activado cada byte sale como dos bytes por el cable (uno por
-nibble) y al recibir se decodifica y corrige 1 bit por byte. La capa de
-enlace siempre ve bytes limpios.
+    "red"     el cable lo hace la red. Sirve para probar el enlace SIN Arduinos:
+              dos terminales en una PC, o una terminal en cada PC. Reproduce lo
+              que harán los Arduinos (Hamming, retardo del baud, ruido opcional).
+    "serial"  puerto USB hacia el Arduino (115200). El Hamming y el enlace entre
+              Arduinos los hace el firmware.
+
+Cómo conectar en modo "red":
+    una sola PC      IP_REMOTA = ""  en las dos terminales. La primera que abre
+                     escucha y la segunda se conecta (el orden no importa).
+    dos PCs          PC receptora: IP_REMOTA = ""  (escucha, abrir primero).
+                     PC emisora:   IP_REMOTA = "<IP de la receptora>".
 """
 import os
 import random
 import socket
 import time
 
-MODO = "emulado"            # "emulado" o "serial"
+MODO = "red"                 # "red" o "serial"
 
-# ---- modo serial
-PUERTO = "COM3"             # puerto de ESTA PC
+# ---------------------------------------------------------------- modo red
+IP_REMOTA = ""              
+PUERTO_TCP = 50007
+HAMMING_CABLE = True         # igual que en el Arduino: es del cable, no de la GUI
+VELOCIDAD = 1.0              # 1 = tarda lo mismo que el cable real; 10 = diez veces más rápido
+PROB_PERDIDA = 0.0           # probabilidad de perder un envío completo (0 a 1)
+PROB_ERROR_BYTE = 0.0        # probabilidad de dañar cada byte que sale al cable (0 a 1)
+BITS_ERROR = 2               # bits que se invierten en un byte dañado (1 = Hamming lo corrige)
 
-# ---- modo emulado
-HOST, PUERTO_TCP = "127.0.0.1", 50007
-VELOCIDAD = 1.0             # 1 = tarda lo mismo que el cable real; 10 = diez veces más rápido
-PROB_PERDIDA = 0.0          # probabilidad de que se pierda una trama completa (0 a 1)
-PROB_ERROR_BYTE = 0.0       # probabilidad de dañar cada byte que sale al cable (0 a 1)
-BITS_ERROR = 2              # bits que se invierten en un byte dañado (con 1 el Hamming lo corrige)
+# ---------------------------------------------------------------- modo serial
+PUERTO = None                # None = detectar solo; si hay varios, "COM3", etc.
+BAUD_USB = 115200            # PC <-> Arduino (debe coincidir con Serial.begin del .ino)
+TROZO = 32                   # bytes por escritura; el buffer de entrada del Arduino es de 64
 
 # Si llega un byte de un par y el otro no aparece en este tiempo, se descarta
 ESPERA_PAR = 0.05
@@ -50,14 +61,14 @@ def _codificar_nibble(n):
 def _decodificar_byte(b):
     """Devuelve el nibble. Corrige 1 bit; con 2 bits malos el resultado es
     basura y lo atrapa el CRC de la trama."""
-    bit = [(b >> i) & 1 for i in range(8)]       # bit[0] = posición 1
+    bit = [(b >> i) & 1 for i in range(8)]
     s1 = bit[0] ^ bit[2] ^ bit[4] ^ bit[6]
     s2 = bit[1] ^ bit[2] ^ bit[5] ^ bit[6]
     s3 = bit[3] ^ bit[4] ^ bit[5] ^ bit[6]
     sindrome = s1 | (s2 << 1) | (s3 << 2)
     paridad_global = sum(bit) & 1
     if paridad_global and sindrome:
-        bit[sindrome - 1] ^= 1                   # un bit malo, se corrige
+        bit[sindrome - 1] ^= 1
     return bit[2] | (bit[4] << 1) | (bit[5] << 2) | (bit[6] << 3)
 
 
@@ -73,110 +84,72 @@ def hamming_codificar(datos):
     return bytes(salida)
 
 
-# ---------------------------------------------------------------- base
+# ---------------------------------------------------------------- modo red
 
-class _CanalBase:
-    def __init__(self, hamming):
-        self.hamming = hamming
-        self._huerfano = None        # primer byte de un par que aún no completa
-        self._t_huerfano = 0.0
+class CanalRed:
+    """Cable falso por TCP. Hace lo que harán los Arduinos: Hamming, retardo del
+    baud y (opcional) ruido. El enlace de datos ni se entera."""
 
-    def enviar(self, datos):
-        crudo = hamming_codificar(datos) if self.hamming else bytes(datos)
-        self._escribir(crudo)
-
-    def recibir(self, max_bytes, timeout=0):
-        crudo = self._leer(max_bytes * (2 if self.hamming else 1), timeout)
-        return self._decodificar(crudo) if self.hamming else crudo
-
-    def _decodificar(self, crudo):
-        ahora = time.monotonic()
-        if self._huerfano is not None and not crudo and ahora - self._t_huerfano > ESPERA_PAR:
-            self._huerfano = None        # el otro byte del par nunca llegó
-        if not crudo:
-            return b""
-
-        if self._huerfano is not None:
-            crudo = bytes([self._huerfano]) + crudo
-            self._huerfano = None
-        if len(crudo) % 2:
-            self._huerfano = crudo[-1]
-            self._t_huerfano = ahora
-            crudo = crudo[:-1]
-
-        salida = bytearray()
-        for i in range(0, len(crudo), 2):
-            salida.append((_TABLA_DEC[crudo[i]] << 4) | _TABLA_DEC[crudo[i + 1]])
-        return bytes(salida)
-
-
-# ---------------------------------------------------------------- serial real
-
-class CanalSerial(_CanalBase):
-    def __init__(self, puerto, baud, hamming):
-        super().__init__(hamming)
-        import serial   # pip install pyserial
-        self.ser = serial.Serial(puerto, baud, timeout=0, write_timeout=5)
-        # al abrir el puerto muchos Arduino se reinician: esperar y limpiar
-        time.sleep(2)
-        self.ser.reset_input_buffer()
-
-    def _escribir(self, crudo):
-        self.ser.write(crudo)
-
-    def _leer(self, n, timeout):
-        limite = time.monotonic() + timeout
-        while True:
-            disponibles = self.ser.in_waiting
-            if disponibles or time.monotonic() >= limite:
-                break
-            time.sleep(0.001)
-        return self.ser.read(min(disponibles, n))
-
-    def cerrar(self):
-        self.ser.close()
-
-
-# ---------------------------------------------------------------- cable emulado
-
-class CanalEmulado(_CanalBase):
-    """Cable falso por TCP en localhost. No importa cuál programa se abre primero:
-    el primero queda escuchando y el segundo se conecta."""
-
-    def __init__(self, baud, hamming):
-        super().__init__(hamming)
+    def __init__(self, baud=9600):
         self.baud = baud
+        self.hamming = HAMMING_CABLE
         self.conn = None
         self.server = None
-        self.pendiente = []          # (instante de llegada, bytes) todavía "en el cable"
-        self.libre_en = 0.0          # cuándo se desocupa el cable para la próxima trama
+        self.destino = None              # a dónde reconectar si somos el que se conecta
+        self._prox_reintento = 0.0
+        self.pendiente = []              # (instante de llegada, bytes) todavía "en el cable"
+        self.libre_en = 0.0
+        self._huerfano = None
+        self._t_huerfano = 0.0
         self._conectar()
 
+    def ajustar_ritmo(self, baud, hamming=None):
+        # el Hamming es del cable (constante), solo el baud se ajusta
+        self.baud = baud
+
     def _conectar(self):
+        if IP_REMOTA:
+            self.destino = (IP_REMOTA, PUERTO_TCP)
+            self.conn = socket.create_connection(self.destino, timeout=5)
+            self.conn.setblocking(False)
+            return
         srv = socket.socket()
         if os.name != "nt":
             srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            srv.bind((HOST, PUERTO_TCP))
+            srv.bind(("0.0.0.0", PUERTO_TCP))
             srv.listen(1)
             srv.setblocking(False)
             self.server = srv
         except OSError:
+            # ya hay alguien escuchando en esta PC: nos conectamos a él
             srv.close()
-            self.conn = socket.create_connection((HOST, PUERTO_TCP), timeout=5)
+            self.destino = ("127.0.0.1", PUERTO_TCP)
+            self.conn = socket.create_connection(self.destino, timeout=5)
             self.conn.setblocking(False)
 
     def _aceptar(self):
-        if self.conn is None and self.server is not None:
+        if self.conn is not None:
+            return
+        if self.server is not None:
             try:
                 self.conn, _ = self.server.accept()
                 self.conn.setblocking(False)
             except BlockingIOError:
                 pass
+        elif self.destino is not None and time.monotonic() >= self._prox_reintento:
+            # el otro lado cerró (terminó un envío): reintentar sin bloquear mucho
+            self._prox_reintento = time.monotonic() + 1.0
+            try:
+                self.conn = socket.create_connection(self.destino, timeout=0.2)
+                self.conn.setblocking(False)
+            except OSError:
+                pass
 
-    def _escribir(self, crudo):
+    def enviar(self, datos):
+        crudo = hamming_codificar(datos) if self.hamming else bytes(datos)
         if random.random() < PROB_PERDIDA:
-            return                                   # trama perdida
+            return
         if PROB_ERROR_BYTE > 0:
             crudo = bytearray(crudo)
             for i in range(len(crudo)):
@@ -196,30 +169,127 @@ class CanalEmulado(_CanalBase):
         ahora = time.monotonic()
         while self.pendiente and self.pendiente[0][0] <= ahora:
             _, crudo = self.pendiente.pop(0)
-            if self.conn is not None:                # sin nadie al otro lado se pierde
+            if self.conn is not None:        # sin nadie al otro lado se pierde
                 try:
                     self.conn.sendall(crudo)
                 except (BlockingIOError, OSError):
                     pass
 
-    def _leer(self, n, timeout):
+    def _leer(self, n):
+        if self.conn is None:
+            return b""
+        try:
+            datos = self.conn.recv(n)
+            if datos:
+                return datos
+            self.conn.close()                # el otro lado cerró
+            self.conn = None
+        except (BlockingIOError, InterruptedError):
+            pass
+        except OSError:
+            self.conn = None
+        return b""
+
+    def recibir(self, max_bytes, timeout=0):
         limite = time.monotonic() + timeout
         while True:
             self._vaciar()
-            if self.conn is not None:
+            crudo = self._leer(max_bytes * (2 if self.hamming else 1))
+            if crudo or time.monotonic() >= limite:
+                break
+            time.sleep(0.001)
+        return self._decodificar(crudo) if self.hamming else crudo
+
+    def _decodificar(self, crudo):
+        ahora = time.monotonic()
+        if self._huerfano is not None and not crudo and ahora - self._t_huerfano > ESPERA_PAR:
+            self._huerfano = None            # el otro byte del par nunca llegó
+        if not crudo:
+            return b""
+        if self._huerfano is not None:
+            crudo = bytes([self._huerfano]) + crudo
+            self._huerfano = None
+        if len(crudo) % 2:
+            self._huerfano = crudo[-1]
+            self._t_huerfano = ahora
+            crudo = crudo[:-1]
+        salida = bytearray()
+        for i in range(0, len(crudo), 2):
+            salida.append((_TABLA_DEC[crudo[i]] << 4) | _TABLA_DEC[crudo[i + 1]])
+        return bytes(salida)
+
+    def cerrar(self):
+        for s in (self.conn, self.server):
+            if s is not None:
                 try:
-                    datos = self.conn.recv(n)
-                    if datos:
-                        return datos
-                    self.conn = None                 # el otro lado cerró
-                except (BlockingIOError, ConnectionResetError, OSError):
+                    s.close()
+                except OSError:
                     pass
+        self.conn = self.server = None
+
+
+# ---------------------------------------------------------------- modo serial
+
+def _buscar_puerto():
+    from serial.tools import list_ports
+    puertos = [p.device for p in list_ports.comports()]
+    if len(puertos) == 1:
+        return puertos[0]
+    if not puertos:
+        raise RuntimeError("No se detectó ningún puerto serial. ¿Está conectado el Arduino?")
+    raise RuntimeError(f"Hay varios puertos ({', '.join(puertos)}). Fija PUERTO en canal.py.")
+
+
+class CanalSerial:
+    """La PC habla con SU Arduino por USB con bytes limpios; el Hamming y el
+    enlace entre Arduinos los hace el firmware."""
+
+    def __init__(self, puerto=None, baud_enlace=9600, hamming=True):
+        import serial                    # pip install pyserial
+        puerto = puerto or PUERTO or _buscar_puerto()
+        self.ser = serial.Serial(puerto, BAUD_USB, timeout=0, write_timeout=5)
+        time.sleep(2)                    # muchos Arduino se reinician al abrir el puerto
+        self.ser.reset_input_buffer()
+        self.salida = bytearray()
+        self.libre_en = 0.0
+        self.ajustar_ritmo(baud_enlace, hamming)
+
+    def ajustar_ritmo(self, baud, hamming=True):
+        """Ritmo al que el Arduino saca bytes de datos al enlace."""
+        self.baud = baud
+        self.hamming = hamming
+        self.bytes_por_s = baud / 10 / (2 if hamming else 1)
+
+    def enviar(self, datos):
+        self.salida.extend(datos)
+        self._bombear()
+
+    def _bombear(self):
+        # el Arduino no saca al enlace tan rápido como llega por USB:
+        # se le da de a trozos y al ritmo del enlace para que no desborde
+        if not self.salida or time.monotonic() < self.libre_en:
+            return
+        trozo = bytes(self.salida[:TROZO])
+        del self.salida[:TROZO]
+        self.ser.write(trozo)
+        self.libre_en = time.monotonic() + len(trozo) / self.bytes_por_s
+
+    def recibir(self, max_bytes, timeout=0):
+        limite = time.monotonic() + timeout
+        while True:
+            self._bombear()
+            disponibles = self.ser.in_waiting
+            if disponibles:
+                return self.ser.read(min(disponibles, max_bytes))
             if time.monotonic() >= limite:
                 return b""
             time.sleep(0.001)
 
+    def cerrar(self):
+        self.ser.close()
 
-def crear_canal(baud, hamming, puerto=None):
-    if MODO == "emulado":
-        return CanalEmulado(baud, hamming)
-    return CanalSerial(puerto or PUERTO, baud, hamming)
+
+def crear_canal(baud=9600, hamming=True, puerto=None):
+    if MODO == "red":
+        return CanalRed(baud)
+    return CanalSerial(puerto, baud, hamming)

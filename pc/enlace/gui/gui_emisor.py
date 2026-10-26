@@ -1,9 +1,12 @@
+import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import os
+
+from pc.enlace.gui import registro
 from pc.enlace.gui.file_processor import FileProcessor
 from pc.enlace.sesion.sesion_emisor import SesionEmisor
-from pc.enlace.canal import crear_canal 
+from pc.enlace.canal import crear_canal
+
 
 class RedesEmisorGUI:
     def __init__(self, root: tk.Tk):
@@ -13,15 +16,15 @@ class RedesEmisorGUI:
         self.root.resizable(False, False)
 
         # Paleta de Colores (Tema Turquesa / Celeste Corporativo)
-        self.COLOR_BG = "#12181f"           # Fondo principal azul oscuro/grisáceo
-        self.COLOR_CARD = "#1a232e"         # Tarjetas / contenedores
-        self.COLOR_CARD_BORDER = "#253342"  # Bordes sutiles
-        self.COLOR_ACCENT = "#00bcd4"       # Turquesa principal
-        self.COLOR_ACCENT_HOVER = "#008ba3" # Turquesa oscuro
-        self.COLOR_TEXT = "#e1e6ed"         # Texto principal
-        self.COLOR_TEXT_MUTED = "#8295a8"   # Texto secundario
-        self.COLOR_LOG_BG = "#0d1117"       # Fondo de consola
-        self.COLOR_LOG_FG = "#38ef7d"       # Verde/Celeste de estado terminal
+        self.COLOR_BG = "#12181f"
+        self.COLOR_CARD = "#1a232e"
+        self.COLOR_CARD_BORDER = "#253342"
+        self.COLOR_ACCENT = "#00bcd4"
+        self.COLOR_ACCENT_HOVER = "#008ba3"
+        self.COLOR_TEXT = "#e1e6ed"
+        self.COLOR_TEXT_MUTED = "#8295a8"
+        self.COLOR_LOG_BG = "#0d1117"
+        self.COLOR_LOG_FG = "#38ef7d"
 
         self.root.configure(bg=self.COLOR_BG)
 
@@ -34,7 +37,9 @@ class RedesEmisorGUI:
 
         self.processor: FileProcessor = None
         self.sesion = None
+        self.canal = None
 
+        self.root.protocol("WM_DELETE_WINDOW", self._cerrar_ventana)
         self._configurar_estilos()
         self._crear_interfaz()
 
@@ -42,23 +47,20 @@ class RedesEmisorGUI:
         style = ttk.Style()
         style.theme_use('clam')
 
-        # Estilo para los Comboboxes en estado normal y desplegado
         style.configure("TCombobox",
-                        fieldbackground=self.COLOR_CARD,   # Fondo del campo cuando está cerrado
-                        background=self.COLOR_CARD_BORDER, # Color de la flecha/borde
-                        foreground=self.COLOR_TEXT,        # Color del texto
+                        fieldbackground=self.COLOR_CARD,
+                        background=self.COLOR_CARD_BORDER,
+                        foreground=self.COLOR_TEXT,
                         darkcolor=self.COLOR_CARD_BORDER,
                         lightcolor=self.COLOR_CARD_BORDER,
                         arrowcolor=self.COLOR_ACCENT)
 
-        # Cambiar el color de selección dentro del campo
         style.map("TCombobox",
                   fieldbackground=[('readonly', self.COLOR_CARD)],
                   foreground=[('readonly', self.COLOR_TEXT)],
                   selectbackground=[('readonly', self.COLOR_CARD)],
                   selectforeground=[('readonly', self.COLOR_ACCENT)])
 
-        # Configurar la lista desplegable flotante (Listbox del Combobox)
         self.root.option_add('*TCombobox*Listbox.background', self.COLOR_CARD)
         self.root.option_add('*TCombobox*Listbox.foreground', self.COLOR_TEXT)
         self.root.option_add('*TCombobox*Listbox.selectBackground', self.COLOR_ACCENT)
@@ -66,13 +68,11 @@ class RedesEmisorGUI:
         self.root.option_add('*TCombobox*Listbox.borderWidth', 1)
         self.root.option_add('*TCombobox*Listbox.relief', 'solid')
 
-        # Estilo para Checkbutton
         style.configure("TCheckbutton",
                         background=self.COLOR_CARD,
                         foreground=self.COLOR_TEXT,
                         font=("Segoe UI", 9))
 
-        # Estilo para Barra de Progreso
         style.configure("Turquoise.Horizontal.TProgressbar",
                         troughcolor=self.COLOR_LOG_BG,
                         background=self.COLOR_ACCENT,
@@ -80,7 +80,6 @@ class RedesEmisorGUI:
                         thickness=12)
 
     def _crear_interfaz(self):
-        # Header / Encabezado
         header_frame = tk.Frame(self.root, bg=self.COLOR_BG)
         header_frame.pack(fill="x", padx=25, pady=(20, 10))
 
@@ -119,23 +118,21 @@ class RedesEmisorGUI:
         grid_params = tk.Frame(card_params, bg=self.COLOR_CARD)
         grid_params.pack(fill="x", padx=15, pady=(0, 12))
 
-        # Fila 0
         tk.Label(grid_params, text="Velocidad (Baud Rate):", bg=self.COLOR_CARD, fg=self.COLOR_TEXT, font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w", pady=6)
         ttk.Combobox(grid_params, textvariable=self.baudrate_var, values=["9600", "19200"], state="readonly", width=12).grid(row=0, column=1, sticky="w", padx=(5, 25))
 
         tk.Label(grid_params, text="Carga Útil (Payload):", bg=self.COLOR_CARD, fg=self.COLOR_TEXT, font=("Segoe UI", 9)).grid(row=0, column=2, sticky="w", pady=6)
         ttk.Combobox(grid_params, textvariable=self.payload_var, values=["500", "900"], state="readonly", width=12).grid(row=0, column=3, sticky="w", padx=5)
 
-        # Fila 1
         tk.Label(grid_params, text="Ancho de Ventana (W):", bg=self.COLOR_CARD, fg=self.COLOR_TEXT, font=("Segoe UI", 9)).grid(row=1, column=0, sticky="w", pady=6)
         ttk.Combobox(grid_params, textvariable=self.window_var, values=["4", "6", "8"], state="readonly", width=12).grid(row=1, column=1, sticky="w", padx=(5, 25))
 
         ttk.Checkbutton(grid_params, text="Habilitar Hamming (8,4)", variable=self.hamming_var, style="TCheckbutton").grid(row=1, column=2, columnspan=2, sticky="w", padx=5)
 
         # Botón Acción Principal
-        self.btn_action = tk.Button(self.root, text="⚡ CARGAR Y FRAGMENTAR ARCHIVO", command=self._preparar_transmision,
-                               bg=self.COLOR_ACCENT, fg="#12181f", activebackground=self.COLOR_ACCENT_HOVER,
-                               activeforeground="#ffffff", font=("Segoe UI", 10, "bold"), bd=0, pady=8, cursor="hand2")
+        self.btn_action = tk.Button(self.root, text="⚡ ENVIAR ARCHIVO", command=self._preparar_transmision,
+                                    bg=self.COLOR_ACCENT, fg="#12181f", activebackground=self.COLOR_ACCENT_HOVER,
+                                    activeforeground="#ffffff", font=("Segoe UI", 10, "bold"), bd=0, pady=8, cursor="hand2")
         self.btn_action.pack(fill="x", padx=25, pady=6)
 
         # 3. TARJETA: Monitor y Consola de Estado
@@ -145,11 +142,9 @@ class RedesEmisorGUI:
         tk.Label(card_monitor, text="MONITOR DE ESTADO DEL ENLACE",
                  font=("Segoe UI", 9, "bold"), bg=self.COLOR_CARD, fg=self.COLOR_ACCENT).pack(anchor="w", padx=15, pady=(12, 6))
 
-        # Barra de progreso
         self.progress_bar = ttk.Progressbar(card_monitor, orient="horizontal", mode="determinate", style="Turquoise.Horizontal.TProgressbar")
         self.progress_bar.pack(fill="x", padx=15, pady=(0, 8))
 
-        # Consola estilo Terminal / Logs
         self.txt_log = tk.Text(card_monitor, bg=self.COLOR_LOG_BG, fg=self.COLOR_LOG_FG,
                                selectbackground=self.COLOR_ACCENT, selectforeground="#000000",
                                font=("Consolas", 9), bd=1, relief="solid", state="disabled")
@@ -168,6 +163,18 @@ class RedesEmisorGUI:
         )
         if filename:
             self.filepath_var.set(filename)
+
+    def _cerrar_canal(self):
+        if self.canal is not None:
+            try:
+                self.canal.cerrar()
+            except Exception:
+                pass
+            self.canal = None
+
+    def _cerrar_ventana(self):
+        self._cerrar_canal()
+        self.root.destroy()
 
     def _preparar_transmision(self):
         filepath = self.filepath_var.get()
@@ -195,7 +202,7 @@ class RedesEmisorGUI:
         self.txt_log.delete("1.0", tk.END)
         self.txt_log.config(state="disabled")
 
-        # Mostrar Resumen Técnico
+        # Resumen técnico (solo datos de configuración; el estado real lo reporta el enlace)
         self._log("==================================================")
         self._log("   SISTEMA DE TRANSFERENCIA — SESIÓN INICIADA")
         self._log("==================================================")
@@ -205,29 +212,21 @@ class RedesEmisorGUI:
         self._log(f"[CONF] Ventana (W): {window_size} tramas | Hamming: {'ACTIVADO' if use_hamming else 'DESACTIVADO'}")
         self._log(f"[SAR] Total de bloques/fragmentos: {resumen['total_fragmentos']}")
         self._log("--------------------------------------------------")
-        
-        # Mensajes obligatorios del enunciado
-        self._log("Inicio de transmisión...")
-        self._log("Transmisión en curso...")
-        self._log("Tasa de error estimada: 00.00%")
 
         self.progress_bar['value'] = 0
-        self.root.update() # Refrescar la interfaz
-        
-        # =================================================================
-        # INTEGRACIÓN CON LA CAPA DE ENLACE
-        # =================================================================
+        self.root.update()
+
         self.btn_action.config(state="disabled")
 
         try:
-            canal = crear_canal(baudrate, use_hamming)
+            self.canal = crear_canal(baudrate, use_hamming)
             self.sesion = SesionEmisor(
                 bloques=resumen['fragmentos'],
                 W=window_size,
                 payload=payload_size,
                 baud=baudrate,
                 hamming=use_hamming,
-                canal=canal,
+                canal=self.canal,
                 tamano=resumen['tamano_total_bytes'],
                 extension=resumen['extension'],
                 al_estado=self._estado_enlace,
@@ -236,17 +235,12 @@ class RedesEmisorGUI:
             self.sesion.iniciar()
             self._tick()
         except Exception as e:
+            self._cerrar_canal()
             self._log(f"[ERROR] Fallo en la capa de enlace: {str(e)}")
             messagebox.showerror("Error de Enlace", f"Ocurrió un error al enviar: {str(e)}")
             self.btn_action.config(state="normal")
 
     def _estado_enlace(self, mensaje: str):
-        # "Inicio" y "en curso" ya se muestran arriba, no los repito
-        if mensaje in ("Inicio de transmisión...", "Transmisión en curso..."):
-            return
-        # mismo texto de antes para el final
-        if mensaje == "Transmisión finalizada":
-            mensaje = "Transmisión Finalizada!"
         self._log(mensaje)
 
     def _set_progreso(self, porcentaje):
@@ -256,31 +250,34 @@ class RedesEmisorGUI:
         try:
             self.sesion.tick()
         except Exception as e:
+            self._cerrar_canal()
             self._log(f"[ERROR] Fallo en la capa de enlace: {str(e)}")
             messagebox.showerror("Error de Enlace", f"Ocurrió un error al enviar: {str(e)}")
             self.btn_action.config(state="normal")
             return
 
         if not self.sesion.terminada:
-            self.root.after(5, self._tick)  # vuelve a llamarse sin congelar la ventana
+            self.root.after(5, self._tick)
             return
 
+        # la sesión terminó: se libera el puerto para poder enviar otro archivo
+        self._cerrar_canal()
         self.btn_action.config(state="normal")
         if self.sesion.abortada:
             messagebox.showerror("Error de Enlace", "La transmisión se abortó.")
             return
 
-        # Tasa de error (Fórmula: Errores / Total tramas enviadas * 100)
-        # acá el error es una retransmisión; la del receptor es la oficial
+        # acá el error es una retransmisión; la tasa oficial es la del receptor
         em = self.sesion.emisor
         total = em.enviadas + em.retransmisiones
         tasa_error = (em.retransmisiones / total) * 100 if total > 0 else 0
         self._log(f"Tasa de error estimada: {tasa_error:.2f}%")
 
-        messagebox.showinfo("Proceso Exitoso", "El archivo se ha transferido a la capa de enlace correctamente.")
+        messagebox.showinfo("Proceso Exitoso", "El archivo se ha transferido correctamente.")
 
 
 if __name__ == "__main__":
+    registro.configurar("emisor", detallado="--debug" in sys.argv)
     root = tk.Tk()
     app = RedesEmisorGUI(root)
     root.mainloop()
