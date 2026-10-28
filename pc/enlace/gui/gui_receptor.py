@@ -10,7 +10,7 @@ class RedesReceptorGUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("File Transfer Protocol — Receptor (Grupo 02)")
-        self.root.geometry("720x560")
+        self.root.geometry("720x590")
         self.root.resizable(False, False)
 
         # Paleta de Colores
@@ -59,6 +59,15 @@ class RedesReceptorGUI:
         grid.pack(fill="x", padx=15, pady=(0, 12))
 
         self.campos = {}
+
+        # el nombre del archivo ocupa toda la fila de arriba
+        tk.Label(grid, text="Nombre del archivo:", bg=self.COLOR_CARD, fg=self.COLOR_TEXT_MUTED,
+                 font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w", pady=3)
+        lbl_nombre = tk.Label(grid, text="—", bg=self.COLOR_CARD, fg=self.COLOR_TEXT,
+                              font=("Segoe UI", 9, "bold"))
+        lbl_nombre.grid(row=0, column=1, columnspan=3, sticky="w", padx=(8, 0), pady=3)
+        self.campos["nombre"] = lbl_nombre
+
         etiquetas = [
             ("tamano", "Tamaño del archivo:"), ("extension", "Formato:"),
             ("tramas", "Total de tramas:"), ("recibido", "Recibido:"),
@@ -66,7 +75,7 @@ class RedesReceptorGUI:
             ("payload", "Carga útil (payload):"), ("ventana", "Ventana (W) / Buffer (J):"),
         ]
         for i, (clave, texto) in enumerate(etiquetas):
-            fila, col = i // 2, (i % 2) * 2
+            fila, col = i // 2 + 1, (i % 2) * 2
             tk.Label(grid, text=texto, bg=self.COLOR_CARD, fg=self.COLOR_TEXT_MUTED,
                      font=("Segoe UI", 9)).grid(row=fila, column=col, sticky="w", pady=3)
             lbl = tk.Label(grid, text="—", bg=self.COLOR_CARD, fg=self.COLOR_TEXT,
@@ -102,9 +111,12 @@ class RedesReceptorGUI:
             return f"{n / 1024:.1f} KB ({n} B)"
         return f"{n} B"
 
-    def mostrar_sesion(self, tamano, extension, baud, hamming, W, J, payload):
+    def mostrar_sesion(self, tamano, extension, baud, hamming, W, J, payload, nombre=""):
         """Rellena la tarjeta con lo que llegó en el INICIO."""
         tramas = -(-tamano // payload) if payload else 0     # división hacia arriba
+        if len(nombre) > 55:                                 # que no se salga de la ventana
+            nombre = nombre[:52] + "..."
+        self.campos["nombre"].config(text=nombre or "(sin nombre)")
         self.campos["tamano"].config(text=self._formatear_bytes(tamano))
         self.campos["extension"].config(text=extension.upper() or "—")
         self.campos["tramas"].config(text=str(tramas))

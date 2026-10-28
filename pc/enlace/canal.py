@@ -31,8 +31,8 @@ IP_REMOTA = ""
 PUERTO_TCP = 50007
 HAMMING_CABLE = True         # igual que en el Arduino: es del cable, no de la GUI
 VELOCIDAD = 1.0              # 1 = tarda lo mismo que el cable real; 10 = diez veces más rápido
-PROB_PERDIDA = 0.0           # probabilidad de perder un envío completo (0 a 1)
-PROB_ERROR_BYTE = 0.0        # probabilidad de dañar cada byte que sale al cable (0 a 1)
+PROB_PERDIDA = 0.05           # probabilidad de perder un envío completo (0 a 1)
+PROB_ERROR_BYTE = 0.00030        # probabilidad de dañar cada byte que sale al cable (0 a 1)
 BITS_ERROR = 2               # bits que se invierten en un byte dañado (1 = Hamming lo corrige)
 
 # ---------------------------------------------------------------- modo serial

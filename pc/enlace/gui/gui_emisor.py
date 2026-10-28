@@ -229,6 +229,7 @@ class RedesEmisorGUI:
                 canal=self.canal,
                 tamano=resumen['tamano_total_bytes'],
                 extension=resumen['extension'],
+                nombre=resumen['nombre_archivo'],
                 al_estado=self._estado_enlace,
                 al_progreso=self._set_progreso,
             )
@@ -267,7 +268,7 @@ class RedesEmisorGUI:
             messagebox.showerror("Error de Enlace", "La transmisión se abortó.")
             return
 
-        # acá el error es una retransmisión; la tasa oficial es la del receptor
+        #  error es una retransmisión; la tasa oficial es la del receptor
         em = self.sesion.emisor
         total = em.enviadas + em.retransmisiones
         tasa_error = (em.retransmisiones / total) * 100 if total > 0 else 0

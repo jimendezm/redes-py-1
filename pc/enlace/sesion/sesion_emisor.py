@@ -17,7 +17,7 @@ class SesionEmisor:
 
     def __init__(self, bloques, W, payload, baud, hamming, canal, tamano, extension,
                  al_estado=print, al_progreso=lambda porcentaje: None,
-                 reloj=time.monotonic, max_reintentos=10):
+                 reloj=time.monotonic, max_reintentos=10, nombre=""):
         self.canal = canal
         self.al_estado = al_estado
         self.al_progreso = al_progreso
@@ -30,7 +30,8 @@ class SesionEmisor:
         self.emisor = Emisor(bloques, W, self.J, self.timeout, self._enviar_datos,
                              reloj, max_reintentos)
 
-        self._inicio = control.construir_inicio(W, self.J, payload, baud, hamming, tamano, extension)
+        self._inicio = control.construir_inicio(W, self.J, payload, baud, hamming,
+                                                tamano, extension, nombre)
         self._intentos_inicio = 0
         self._vence_inicio = None
         self._progreso = -1

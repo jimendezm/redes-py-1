@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import tkinter as tk
@@ -50,8 +51,9 @@ class ReceptorApp:
         self.gui.mostrar_sesion(
             tamano=info.tamano, extension=info.extension, baud=info.baud,
             hamming=info.hamming, W=info.W, J=info.J, payload=info.payload,
+            nombre=info.nombre,
         )
-        self.gui.log(f"[SESIÓN] Parámetros recibidos del emisor: {info.tamano} bytes, "
+        self.gui.log(f"[SESIÓN] Recibiendo '{info.nombre}': {info.tamano} bytes, "
                      f"{info.extension}")
 
     def _al_datos(self, datos):
@@ -65,11 +67,26 @@ class ReceptorApp:
         # sigue activo tras completar: si el último ACK se pierde, hay que responder
         self.root.after(5, self._tick)
 
+    def _ruta_destino(self):
+        """Usa el nombre original del archivo. Se limpia para que no pueda salirse
+        de la carpeta ni traer caracteres inválidos, y no pisa un archivo existente."""
+        info = self.sesion.info
+        nombre = os.path.basename((info.nombre or "").replace("\\", "/"))
+        nombre = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", nombre).strip(" .")
+        if not nombre:
+            nombre = f"recibido_{int(time.time())}{info.extension}"
+        base, ext = os.path.splitext(nombre)
+        ruta = os.path.join("recibidos", nombre)
+        n = 1
+        while os.path.exists(ruta):
+            ruta = os.path.join("recibidos", f"{base}_{n}{ext}")
+            n += 1
+        return ruta
+
     def _guardar(self):
         self.guardado = True
         os.makedirs("recibidos", exist_ok=True)
-        ruta = os.path.join("recibidos",
-                            f"recibido_{int(time.time())}{self.sesion.info.extension}")
+        ruta = self._ruta_destino()
         with open(ruta, "wb") as f:
             f.write(self.datos)
         self.gui.log(f"Archivo guardado en: {ruta}")
